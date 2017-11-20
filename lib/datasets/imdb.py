@@ -26,6 +26,15 @@ class imdb(object):
         self._roidb_handler = self.default_roidb
         # Use this dict for storing dataset specific config options
         self.config = {}
+        self.test_bbox_methods = {\
+                                     'ss'    : 'test.mat',\
+                                     'rahtu' : 'test_rahtu.mat',\
+                                     'edges' : 'test_edges.mat',\
+                                     'gop'   : 'test_gop.mat',\
+                                     'lpo'   : 'test_lpo.mat',\
+                                     'objectness' : 'test_objectness.mat',\
+                                     'rp'    : 'test_rp.mat'
+                                    }
 
     @property
     def name(self):
@@ -94,6 +103,9 @@ class imdb(object):
         all_boxes[class][image] = [] or np.array of shape #dets x 5
         """
         raise NotImplementedError
+    def get_test_proposals(self):
+        return self.test_bbox_methods[cfg.TEST.BBOX_METHODE]
+
 
     def _get_widths(self):
       return [PIL.Image.open(self.image_path_at(i)).size[0]
@@ -108,6 +120,15 @@ class imdb(object):
             oldx2 = boxes[:, 2].copy()
             boxes[:, 0] = widths[i] - oldx2 - 1
             boxes[:, 2] = widths[i] - oldx1 - 1
+            for b in range(len(boxes)):     
+                if boxes[b][2] < boxes[b][0]:
+                   boxes[b][0] = 0.
+                   self.roidb[i]['boxes'][b][0] = 0. 
+                if boxes[b][3] < boxes[b][1]:
+                   boxes[b][1] = 0.
+                   self.roidb[i]['boxes'][b][1] = 0. 
+                   #print b
+                   #print boxes[b]
             assert (boxes[:, 2] >= boxes[:, 0]).all()
             entry = {'boxes' : boxes,
                      'gt_overlaps' : self.roidb[i]['gt_overlaps'],
