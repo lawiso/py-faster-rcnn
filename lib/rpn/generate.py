@@ -10,9 +10,12 @@ from utils.blob import im_list_to_blob
 from utils.timer import Timer
 import numpy as np
 import cv2
-
+import matplotlib.pyplot as plt
+import os  
+#import time
 def _vis_proposals(im, dets, thresh=0.5):
     """Draw detected bounding boxes."""
+      
     inds = np.where(dets[:, -1] >= thresh)[0]
     if len(inds) == 0:
         return
@@ -56,8 +59,9 @@ def _get_image_blob(im):
             in the image pyramid
     """
     im_orig = im.astype(np.float32, copy=True)
-    im_orig -= cfg.PIXEL_MEANS
-
+    if cfg.MITTLE_FREI:
+        im_orig -= cfg.PIXEL_MEANS  
+    im_orig = im_orig * cfg.SCALE
     im_shape = im_orig.shape
     im_size_min = np.min(im_shape[0:2])
     im_size_max = np.max(im_shape[0:2])
@@ -81,22 +85,49 @@ def _get_image_blob(im):
 
     return blob, im_info
 
+def _save_proposals(im_name, dets, folder, thresh=0.0):
+    #dir_path = os.path.join(os.path.dirname(im_name), '..', 'det_boxes', folder)
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+    f_name = os.path.join(folder, \
+                          os.path.basename(os.path.splitext(im_name)[0])+'.txt')
+    for i in xrange(dets.shape[0]):
+        bbox = dets[i, :4]
+        score = dets[i, -1]
+        #from IPython import embed; embed()        
+        if score > thresh:
+            with open(f_name, "a") as f:
+                f.write("xmin: {}, ymin: {}, xmax: {}, ymax: {}, score: {} \n" \
+                                .format(round(bbox[0]), round(bbox[1]), \
+                                        round(bbox[2]), round(bbox[3]), \
+                                        round(score, 3)))
 def im_proposals(net, im):
     """Generate RPN proposals on a single image."""
     blobs = {}
     blobs['data'], blobs['im_info'] = _get_image_blob(im)
     net.blobs['data'].reshape(*(blobs['data'].shape))
     net.blobs['im_info'].reshape(*(blobs['im_info'].shape))
+    #from IPython import embed; embed() 
+    #_s = Timer()
+    #_s.tic()
+    #start_time = time.time()
     blobs_out = net.forward(
             data=blobs['data'].astype(np.float32, copy=False),
             im_info=blobs['im_info'].astype(np.float32, copy=False))
-
+    #test = _s.toc(average = False)
+    #end_time = time.time()
+    #diff = end_time - start_time
+    #print 'det_proposals: {:.3f}s' \
+    #          .format(diff)
+    #from IPython import embed; embed()
+    #print blobs_out
     scale = blobs['im_info'][0, 2]
+    #print scale
     boxes = blobs_out['rois'][:, 1:].copy() / scale
     scores = blobs_out['scores'].copy()
     return boxes, scores
 
-def imdb_proposals(net, imdb):
+def imdb_proposals(net, imdb, save2txt=False, folder=''):
     """Generate RPN proposals on all images in an imdb."""
 
     _t = Timer()
@@ -108,10 +139,55 @@ def imdb_proposals(net, imdb):
         _t.toc()
         print 'im_proposals: {:d}/{:d} {:.3f}s' \
               .format(i + 1, imdb.num_images, _t.average_time)
+        dets = np.hstack((imdb_boxes[i], scores))        
+        if save2txt:
+            _save_proposals(imdb.image_path_at(i), dets, folder)        
         if 0:
-            dets = np.hstack((imdb_boxes[i], scores))
             # from IPython import embed; embed()
-            _vis_proposals(im, dets[:3, :], thresh=0.9)
+            _vis_proposals(im, dets[:20, :], thresh=0.3)
+            plt.show()
+
+    return imdb_boxes
+    
+
+
+
+
+def imdb_proposals2(net, imdb, save2txt=True, fname='./test.rpndetections', txt_thresh=0.0):
+    """Generate RPN proposals on all images in an imdb."""
+
+    _t = Timer()
+    imdb_boxes = [[] for _ in xrange(imdb.num_images)]
+    
+    if save2txt:
+        folder = os.path.dirname(fname)
+        if not os.path.exists(folder): os.makedirs(folder)
+        f = open(fname, 'w')
+    
+    for i in xrange(imdb.num_images):
+        im = cv2.imread(imdb.image_path_at(i))
+        #print imdb.image_path_at(i)
+        _t.tic()
+        imdb_boxes[i], scores = im_proposals(net, im)
+        _t.toc()
+        print 'im_proposals: {:d}/{:d} {:.3f}s' \
+              .format(i + 1, imdb.num_images, _t.average_time)
+        dets = np.hstack((imdb_boxes[i], scores))   
+             
+        if save2txt:
+            det_str = ""
+            for j in xrange(dets.shape[0]):
+                bbox = dets[j, :4]
+                score = dets[j, -1]       
+                if score < txt_thresh: continue
+                det_str += " {} {} {} {} {:0.3f}".format(round(bbox[0]), round(bbox[1]),
+                                         round(bbox[2]-bbox[0]), round(bbox[3]-bbox[1]),
+                                         score)
+            f.write("{} {}\n".format(i, det_str))
+            
+        if 0:
+            # from IPython import embed; embed()
+            _vis_proposals(im, dets[:20, :], thresh=0.3)
             plt.show()
 
     return imdb_boxes

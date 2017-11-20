@@ -24,10 +24,17 @@ class ProposalLayer(caffe.Layer):
     def setup(self, bottom, top):
         # parse the layer parameter string, which must be valid YAML
         layer_params = yaml.load(self.param_str_)
-
+        
         self._feat_stride = layer_params['feat_stride']
-        anchor_scales = layer_params.get('scales', (8, 16, 32))
-        self._anchors = generate_anchors(scales=np.array(anchor_scales))
+        #from IPython import embed; embed()
+        #anchor_scales = layer_params.get('scales', (8, 16, 32))
+        anchor_ratios = layer_params.get('ratios', cfg.ANCHOR_RATIOS)
+        anchor_scales = layer_params.get('scales', cfg.ANCHOR_SCALE)
+        anchor_base_size = cfg.ANCHOR_BASE_SIZE        
+        #self._anchors = generate_anchors(base_size=anchor_base_size,)\
+        #                                 scales=np.array(anchor_scales))
+        self._anchors = generate_anchors(base_size=anchor_base_size,ratios=np.array(anchor_ratios),\
+                                         scales=np.array(anchor_scales))
         self._num_anchors = self._anchors.shape[0]
 
         if DEBUG:
@@ -62,6 +69,7 @@ class ProposalLayer(caffe.Layer):
             'Only single item batches are supported'
 
         cfg_key = str(self.phase) # either 'TRAIN' or 'TEST'
+        
         pre_nms_topN  = cfg[cfg_key].RPN_PRE_NMS_TOP_N
         post_nms_topN = cfg[cfg_key].RPN_POST_NMS_TOP_N
         nms_thresh    = cfg[cfg_key].RPN_NMS_THRESH
@@ -123,7 +131,8 @@ class ProposalLayer(caffe.Layer):
 
         # 2. clip predicted boxes to image
         proposals = clip_boxes(proposals, im_info[:2])
-
+        if DEBUG:
+            print 'proposals: ', proposals.shape 
         # 3. remove predicted boxes with either height or width < threshold
         # (NOTE: convert min_size to input image scale stored in im_info[2])
         keep = _filter_boxes(proposals, min_size * im_info[2])
@@ -133,6 +142,9 @@ class ProposalLayer(caffe.Layer):
         # 4. sort all (proposal, score) pairs by score from highest to lowest
         # 5. take top pre_nms_topN (e.g. 6000)
         order = scores.ravel().argsort()[::-1]
+        if DEBUG:        
+            print 'pre_nms_topN: ', pre_nms_topN
+        #from IPython import embed; embed()  
         if pre_nms_topN > 0:
             order = order[:pre_nms_topN]
         proposals = proposals[order, :]
@@ -141,11 +153,12 @@ class ProposalLayer(caffe.Layer):
         # 6. apply nms (e.g. threshold = 0.7)
         # 7. take after_nms_topN (e.g. 300)
         # 8. return the top proposals (-> RoIs top)
-        keep = nms(np.hstack((proposals, scores)), nms_thresh)
-        if post_nms_topN > 0:
-            keep = keep[:post_nms_topN]
-        proposals = proposals[keep, :]
-        scores = scores[keep]
+        if cfg.TEST.RPN_USW_NMS:
+            keep = nms(np.hstack((proposals, scores)), nms_thresh)
+            if post_nms_topN > 0:
+                keep = keep[:post_nms_topN]
+            proposals = proposals[keep, :]
+            scores = scores[keep]
 
         # Output rois blob
         # Our RPN implementation only supports a single input image, so all
