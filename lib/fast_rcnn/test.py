@@ -18,6 +18,7 @@ from fast_rcnn.nms_wrapper import nms
 import cPickle
 from utils.blob import im_list_to_blob
 import os
+import uuid
 
 def _get_image_blob(im):
     """Converts an image into a network input.
@@ -31,8 +32,9 @@ def _get_image_blob(im):
             in the image pyramid
     """
     im_orig = im.astype(np.float32, copy=True)
-    im_orig -= cfg.PIXEL_MEANS
-
+    if cfg.MITTLE_FREI:
+        im_orig -= cfg.PIXEL_MEANS  
+    im_orig = im_orig * cfg.SCALE
     im_shape = im_orig.shape
     im_size_min = np.min(im_shape[0:2])
     im_size_max = np.max(im_shape[0:2])
@@ -131,7 +133,7 @@ def im_detect(net, im, boxes=None):
                                         return_inverse=True)
         blobs['rois'] = blobs['rois'][index, :]
         boxes = boxes[index, :]
-
+    #from IPython import embed; embed()
     if cfg.TEST.HAS_RPN:
         im_blob = blobs['data']
         blobs['im_info'] = np.array(
@@ -187,21 +189,40 @@ def vis_detections(im, class_name, dets, thresh=0.3):
     """Visual debugging of detections."""
     import matplotlib.pyplot as plt
     im = im[:, :, (2, 1, 0)]
+    plt.cla()
+    plt.imshow(im)
     for i in xrange(np.minimum(10, dets.shape[0])):
         bbox = dets[i, :4]
         score = dets[i, -1]
+                
         if score > thresh:
-            plt.cla()
-            plt.imshow(im)
+            
             plt.gca().add_patch(
                 plt.Rectangle((bbox[0], bbox[1]),
                               bbox[2] - bbox[0],
                               bbox[3] - bbox[1], fill=False,
-                              edgecolor='g', linewidth=3)
+                              edgecolor='r', linewidth=2)
                 )
             plt.title('{}  {:.3f}'.format(class_name, score))
-            plt.show()
+    plt.show()
 
+def save_proposals(im_name, class_name, dets, path, random_folder, thresh=0.3):
+    dir_path = os.path.join(path, str(random_folder))
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+    f_name = os.path.join(dir_path, \
+                          os.path.basename(os.path.splitext(im_name)[0])+'.txt')
+    #with open(f_name, "w") as f:
+    with open(f_name, "a") as f:
+        for i in xrange(dets.shape[0]):
+            bbox = dets[i, :4]
+            score = dets[i, -1]
+            #from IPython import embed; embed()        
+            if score > thresh: 
+                f.write("xmin: {}, ymin: {}, xmax: {}, ymax: {}, cls: {}, score: {} \n" \
+                                .format(round(bbox[0]), round(bbox[1]), \
+                                        round(bbox[2]), round(bbox[3]), \
+                                        class_name, round(score, 3)))
 def apply_nms(all_boxes, thresh):
     """Apply non-maximum suppression to all predicted boxes output by the
     test_net method.
@@ -224,7 +245,7 @@ def apply_nms(all_boxes, thresh):
             nms_boxes[cls_ind][im_ind] = dets[keep, :].copy()
     return nms_boxes
 
-def test_net(net, imdb, max_per_image=100, thresh=0.05, vis=False):
+def test_net(net, imdb, max_per_image=1000, thresh=0.05, vis=False, test_id=''):
     """Test a Fast R-CNN network on an image database."""
     num_images = len(imdb.image_index)
     # all detections are collected into:
@@ -240,7 +261,7 @@ def test_net(net, imdb, max_per_image=100, thresh=0.05, vis=False):
 
     if not cfg.TEST.HAS_RPN:
         roidb = imdb.roidb
-
+    random_folder = uuid.uuid1()
     for i in xrange(num_images):
         # filter out any ground truth boxes
         if cfg.TEST.HAS_RPN:
@@ -252,8 +273,8 @@ def test_net(net, imdb, max_per_image=100, thresh=0.05, vis=False):
             # that have the gt_classes field set to 0, which means there's no
             # ground truth.
             box_proposals = roidb[i]['boxes'][roidb[i]['gt_classes'] == 0]
-
-        im = cv2.imread(imdb.image_path_at(i))
+        im_path = imdb.image_path_at(i)
+        im = cv2.imread(im_path)
         _t['im_detect'].tic()
         scores, boxes = im_detect(net, im, box_proposals)
         _t['im_detect'].toc()
@@ -266,10 +287,22 @@ def test_net(net, imdb, max_per_image=100, thresh=0.05, vis=False):
             cls_boxes = boxes[inds, j*4:(j+1)*4]
             cls_dets = np.hstack((cls_boxes, cls_scores[:, np.newaxis])) \
                 .astype(np.float32, copy=False)
-            keep = nms(cls_dets, cfg.TEST.NMS)
-            cls_dets = cls_dets[keep, :]
-            if vis:
-                vis_detections(im, imdb.classes[j], cls_dets)
+            if cfg.TEST.USW_NMS:
+                keep = nms(cls_dets, cfg.TEST.NMS)
+                cls_dets = cls_dets[keep, :]
+            
+            if True:
+                #from IPython import embed; embed() 
+                CONF_THRESH = 0.0
+                folder = os.path.join(output_dir, net.name + \
+                                      '_detections_threshold_' + str(CONF_THRESH))
+                save_proposals(im_path, imdb.classes[j], \
+                               cls_dets, folder, \
+                               'thresh_' + str(CONF_THRESH) + \
+                               '_' + test_id + '_' + str(random_folder), \
+                               CONF_THRESH)
+            if False:
+                vis_detections(im, imdb.classes[j], cls_dets, 0.5)
             all_boxes[j][i] = cls_dets
 
         # Limit to max_per_image detections *over all classes*

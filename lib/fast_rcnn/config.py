@@ -35,7 +35,7 @@ __C.TRAIN = edict()
 
 # Scales to use during training (can list multiple scales)
 # Each scale is the pixel size of an image's shortest side
-__C.TRAIN.SCALES = (600,)
+__C.TRAIN.SCALES = (624,)
 
 # Max pixel size of the longest side of a scaled input image
 __C.TRAIN.MAX_SIZE = 1000
@@ -132,14 +132,16 @@ __C.TEST = edict()
 
 # Scales to use during testing (can list multiple scales)
 # Each scale is the pixel size of an image's shortest side
-__C.TEST.SCALES = (600,)
+__C.TEST.SCALES = (624,)
+
 
 # Max pixel size of the longest side of a scaled input image
-__C.TEST.MAX_SIZE = 1000
+__C.TEST.MAX_SIZE = 2000
 
 # Overlap threshold used for non-maximum suppression (suppress boxes with
 # IoU >= this threshold)
 __C.TEST.NMS = 0.3
+__C.TEST.USW_NMS = True
 
 # Experimental: treat the (K+1) units in the cls_score layer as linear
 # predictors (trained, eg, with one-vs-rest SVMs).
@@ -155,6 +157,7 @@ __C.TEST.HAS_RPN = False
 __C.TEST.PROPOSAL_METHOD = 'selective_search'
 
 ## NMS threshold used on RPN proposals
+__C.TEST.RPN_USW_NMS = True
 __C.TEST.RPN_NMS_THRESH = 0.7
 ## Number of top scoring boxes to keep before apply NMS to RPN proposals
 __C.TEST.RPN_PRE_NMS_TOP_N = 6000
@@ -163,6 +166,10 @@ __C.TEST.RPN_POST_NMS_TOP_N = 300
 # Proposal height and width both need to be greater than RPN_MIN_SIZE (at orig image scale)
 __C.TEST.RPN_MIN_SIZE = 16
 
+__C.TEST.PROPOSAL_NUMBER = 500000
+__C.TEST.BBOX_METHODE = 'ss'
+__C.TEST.RPN_FILE = ''
+__C.TEST.AP_THRESHOLD = 0.5
 
 #
 # MISC
@@ -207,6 +214,18 @@ __C.USE_GPU_NMS = True
 # Default GPU device id
 __C.GPU_ID = 0
 
+
+__C.GRAY = False
+
+__C.SCALE = 1.
+__C.MITTLE_FREI = True
+
+__C.ANCHOR_BASE_SIZE = 16
+__C.ANCHOR_SCALE = (8, 16, 32)
+__C.ANCHOR_RATIOS = (0.5, 1, 2)
+
+__C.MAX_PROPOSALS = 200000
+__C.USE_SS_CACHE = True
 
 def get_output_dir(imdb, net=None):
     """Return the directory where experimental artifacts are placed.
