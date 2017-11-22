@@ -1,3 +1,22 @@
+### Faster R-CNN adapted for aerial imagery
+
+This is a fork of rbgirshick/py-faster-rcnn
+
+To get the code run, follow the installation instruction for faster r-cnn (see below 1.-3.).
+
+The following data structure (e.g. for VEDAI) is required:
+/data/VEDAI_512/Train/pos
+/data/VEDAI_512/Train/annotations
+/data/VEDAI_512/Test/pos
+/data/VEDAI_512/Train/annotations
+Xml files are used as annotation files. 
+
+To initialize the network, download VGG-16 caffemodel (http://www.robots.ox.ac.uk/~vgg/software/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel).
+The downloaded model has to be stored in /models/initialization
+ 
+
+
+
 ### Disclaimer
 
 The official Faster R-CNN code (written in MATLAB) is available [here](https://github.com/ShaoqingRen/faster_rcnn).
